@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="laser_assembler" type="point_cloud2_assembler" output="screen"  name="point_cloud2_assembler">
+    <remap from="cloud" to="lidar_0/segmented_points"/>
+    <param name="tf_cache_time_secs" type="double" value="5.0" />
+    <param name="max_clouds" type="int" value="750" />
+    <param name="fixed_frame" type="string" value="ground" />
+  </node>
+</launch>
