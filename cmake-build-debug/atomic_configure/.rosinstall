@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/sander/ros/src/laser_assembler/cmake-build-debug/devel/setup.sh
