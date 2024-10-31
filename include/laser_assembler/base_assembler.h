@@ -34,20 +34,20 @@
 
 //! \author Vijay Pradeep
 
-#include "ros/ros.h"
-#include "tf/transform_listener.h"
-#include "tf/message_filter.h"
-#include "sensor_msgs/PointCloud.h"
-#include "sensor_msgs/point_cloud_conversion.h"
+#include "rclcpp/rclcpp.hpp"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/message_filter.h"
+#include "tf2_sensor_msgs/tf2_sensor_msgs.h"
+#include "sensor_msgs/msg/point_cloud.hpp"
+#include "sensor_msgs/point_cloud_conversion.hpp"
 #include "message_filters/subscriber.h"
 
 #include <deque>
 
 // Service
-#include "laser_assembler/AssembleScans.h"
-#include "laser_assembler/AssembleScans2.h"
+#include "laser_assembler_interfaces/srv/assemble_scans.hpp"
+#include "laser_assembler_interfaces/srv/assemble_scans2.hpp"
 
-#include "boost/thread.hpp"
 #include "math.h"
 
 namespace laser_assembler
@@ -60,7 +60,7 @@ template<class T>
 class BaseAssembler
 {
 public:
-  BaseAssembler(const std::string& max_size_param_name);
+  BaseAssembler(std::shared_ptr<rclcpp::Node> nh, const std::string& max_size_param_name);
   ~BaseAssembler() ;
 
   /**
@@ -88,37 +88,43 @@ public:
    * \param scan_in The scan that we want to convert
    * \param cloud_out The result of transforming scan_in into a cloud in frame fixed_frame_id
    */
-  virtual void ConvertToCloud(const std::string& fixed_frame_id, const T& scan_in, sensor_msgs::PointCloud& cloud_out) = 0 ;
+  virtual void ConvertToCloud(const std::string& fixed_frame_id, const T& scan_in, sensor_msgs::msg::PointCloud& cloud_out) = 0 ;
 
 protected:
-  tf::TransformListener* tf_ ;
-  tf::MessageFilter<T>* tf_filter_;
+  tf2_ros::Buffer* tf2_buffer_;
+  tf2_ros::TransformListener* tf2_ ;
+  tf2_ros::MessageFilter<T>* tf2_filter_;
 
-  ros::NodeHandle private_ns_;
-  ros::NodeHandle n_;
+  // ros::NodeHandle private_ns_;
+  std::shared_ptr<rclcpp::Node> n_;
 
 private:
   // ROS Input/Ouptut Handling
-  ros::ServiceServer build_cloud_server_;
-  ros::ServiceServer assemble_scans_server_;
-  ros::ServiceServer build_cloud_server2_;
-  ros::ServiceServer assemble_scans_server2_;
+  rclcpp::Service<laser_assembler_interfaces::srv::AssembleScans>::SharedPtr build_cloud_server_;
+  rclcpp::Service<laser_assembler_interfaces::srv::AssembleScans>::SharedPtr assemble_scans_server_;
+  rclcpp::Service<laser_assembler_interfaces::srv::AssembleScans2>::SharedPtr build_cloud_server2_;
+  rclcpp::Service<laser_assembler_interfaces::srv::AssembleScans2>::SharedPtr assemble_scans_server2_;
+
   message_filters::Subscriber<T> scan_sub_;
-  message_filters::Connection tf_filter_connection_;
+  message_filters::Connection tf2_filter_connection_;
 
   //! \brief Callback function for every time we receive a new scan
   //void scansCallback(const tf::MessageNotifier<T>::MessagePtr& scan_ptr, const T& testA)
-  virtual void msgCallback(const boost::shared_ptr<const T>& scan_ptr) ;
+  virtual void msgCallback(const std::shared_ptr<const T>& scan_ptr) ;
 
   //! \brief Service Callback function called whenever we need to build a cloud
-  bool buildCloud(AssembleScans::Request& req, AssembleScans::Response& resp) ;
-  bool assembleScans(AssembleScans::Request& req, AssembleScans::Response& resp) ;
-  bool buildCloud2(AssembleScans2::Request& req, AssembleScans2::Response& resp) ;
-  bool assembleScans2(AssembleScans2::Request& req, AssembleScans2::Response& resp) ;
+  bool buildCloud(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
+                  const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp) ;
+  bool assembleScans(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
+                     const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp) ;
+  bool buildCloud2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
+                   const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp) ;
+  bool assembleScans2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
+                      const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp) ;
 
   //! \brief Stores history of scans
-  std::deque<sensor_msgs::PointCloud> scan_hist_ ;
-  boost::mutex scan_hist_mutex_ ;
+  std::deque<sensor_msgs::msg::PointCloud> scan_hist_ ;
+  std::mutex scan_hist_mutex_ ;
 
   //! \brief The number points currently in the scan history
   unsigned int total_pts_ ;
@@ -135,113 +141,129 @@ private:
 } ;
 
 template <class T>
-BaseAssembler<T>::BaseAssembler(const std::string& max_size_param_name) : private_ns_("~")
+BaseAssembler<T>::BaseAssembler(std::shared_ptr<rclcpp::Node> nh, const std::string& max_size_param_name) : n_(nh)
 {
   // **** Initialize TransformListener ****
   double tf_cache_time_secs ;
-  private_ns_.param("tf_cache_time_secs", tf_cache_time_secs, 10.0) ;
+  // private_ns_.param("tf_cache_time_secs", tf_cache_time_secs, 10.0) ;
+  n_->declare_parameter("tf_cache_time_secs", 10.0);
+  tf_cache_time_secs = n_->get_parameter("tf_cache_time_secs").as_double();
   if (tf_cache_time_secs < 0)
-    ROS_ERROR("Parameter tf_cache_time_secs<0 (%f)", tf_cache_time_secs) ;
+    RCLCPP_ERROR(n_->get_logger(), "Parameter tf_cache_time_secs<0 (%f)", tf_cache_time_secs) ;
 
-  tf_ = new tf::TransformListener(n_, ros::Duration(tf_cache_time_secs));
-  ROS_INFO("TF Cache Time: %f Seconds", tf_cache_time_secs) ;
+  tf2_buffer_ = new tf2_ros::Buffer(n_->get_clock(), tf2::durationFromSec(tf_cache_time_secs));
+  tf2_ = new tf2_ros::TransformListener(*tf2_buffer_, n_);
+  RCLCPP_INFO(n_->get_logger(), "TF Cache Time: %f Seconds", tf_cache_time_secs) ;
 
   // ***** Set max_scans *****
   const int default_max_scans = 400 ;
   int tmp_max_scans ;
-  private_ns_.param(max_size_param_name, tmp_max_scans, default_max_scans);
+  n_->declare_parameter(max_size_param_name, default_max_scans);
+  tmp_max_scans = n_->get_parameter(max_size_param_name).as_int();
+
   if (tmp_max_scans < 0)
   {
-    ROS_ERROR("Parameter max_scans<0 (%i)", tmp_max_scans) ;
+    RCLCPP_ERROR(n_->get_logger(), "Parameter max_scans<0 (%i)", tmp_max_scans) ;
     tmp_max_scans = default_max_scans ;
   }
   max_scans_ = tmp_max_scans ;
-  ROS_INFO("Max Scans in History: %u", max_scans_) ;
+  RCLCPP_INFO(n_->get_logger(), "Max Scans in History: %u", max_scans_) ;
   total_pts_ = 0 ;    // We're always going to start with no points in our history
 
   // ***** Set fixed_frame *****
-  private_ns_.param("fixed_frame", fixed_frame_, std::string("ERROR_NO_NAME"));
-  ROS_INFO("Fixed Frame: %s", fixed_frame_.c_str()) ;
+  n_->declare_parameter("fixed_frame", std::string("ERROR_NO_NAME"));
+  fixed_frame_ = n_->get_parameter("fixed_frame").as_string();
+
+  RCLCPP_INFO(n_->get_logger(), "Fixed Frame: %s", fixed_frame_.c_str()) ;
   if (fixed_frame_ == "ERROR_NO_NAME")
-    ROS_ERROR("Need to set parameter fixed_frame") ;
+    RCLCPP_ERROR(n_->get_logger(), "Need to set parameter fixed_frame") ;
 
   // ***** Set downsample_factor *****
   int tmp_downsample_factor ;
-  private_ns_.param("downsample_factor", tmp_downsample_factor, 1);
+  n_->declare_parameter("downsample_factor", 1);
+  tmp_downsample_factor = n_->get_parameter("downsample_factor").as_int();
+
   if (tmp_downsample_factor < 1)
   {
-    ROS_ERROR("Parameter downsample_factor<1: %i", tmp_downsample_factor) ;
+    RCLCPP_ERROR(n_->get_logger(), "Parameter downsample_factor<1: %i", tmp_downsample_factor) ;
     tmp_downsample_factor = 1 ;
   }
   downsample_factor_ = tmp_downsample_factor ;
   if (downsample_factor_ != 1)
-    ROS_WARN("Downsample set to [%u]. Note that this is an unreleased/unstable feature", downsample_factor_);
+    RCLCPP_WARN(n_->get_logger(), "Downsample set to [%u]. Note that this is an unreleased/unstable feature", downsample_factor_);
 
   // ***** Start Services *****
-  build_cloud_server_    = n_.advertiseService("build_cloud",    &BaseAssembler<T>::buildCloud,    this);
-  assemble_scans_server_ = n_.advertiseService("assemble_scans", &BaseAssembler<T>::assembleScans, this);
-  build_cloud_server2_    = n_.advertiseService("build_cloud2",    &BaseAssembler<T>::buildCloud2,    this);
-  assemble_scans_server2_ = n_.advertiseService("assemble_scans2", &BaseAssembler<T>::assembleScans2, this);
+  build_cloud_server_ = n_->create_service<laser_assembler_interfaces::srv::AssembleScans>("~/build_cloud", 
+        std::bind(&BaseAssembler<T>::buildCloud, this, std::placeholders::_1, std::placeholders::_2));
+  assemble_scans_server_ = n_->create_service<laser_assembler_interfaces::srv::AssembleScans>("~/assemble_scans", 
+        std::bind(&BaseAssembler<T>::assembleScans, this, std::placeholders::_1, std::placeholders::_2));
+  build_cloud_server2_ = n_->create_service<laser_assembler_interfaces::srv::AssembleScans2>("~/build_cloud2", 
+        std::bind(&BaseAssembler<T>::buildCloud2, this, std::placeholders::_1, std::placeholders::_2));
+  assemble_scans_server2_ = n_->create_service<laser_assembler_interfaces::srv::AssembleScans2>("~/assemble_scans2", 
+        std::bind(&BaseAssembler<T>::assembleScans2, this, std::placeholders::_1, std::placeholders::_2));
 
   // ***** Start Listening to Data *****
   // (Well, don't start listening just yet. Keep this as null until we actually start listening, when start() is called)
-  tf_filter_ = NULL;
+  tf2_filter_ = NULL;
 
 }
 
 template <class T>
 void BaseAssembler<T>::start(const std::string& in_topic_name)
 {
-  ROS_DEBUG("Called start(string). Starting to listen on message_filter::Subscriber the input stream");
-  if (tf_filter_)
-    ROS_ERROR("assembler::start() was called twice!. This is bad, and could leak memory") ;
+  RCLCPP_DEBUG(n_->get_logger(), "Called start(string). Starting to listen on message_filter::Subscriber the input stream");
+  if (tf2_filter_)
+    RCLCPP_ERROR(n_->get_logger(), "assembler::start() was called twice!. This is bad, and could leak memory") ;
   else
   {
-    scan_sub_.subscribe(n_, in_topic_name, 10);
-    tf_filter_ = new tf::MessageFilter<T>(scan_sub_, *tf_, fixed_frame_, 10);
-    tf_filter_->registerCallback( boost::bind(&BaseAssembler<T>::msgCallback, this, _1) );
+    rclcpp::QoS custom_qos(10);
+    scan_sub_.subscribe(n_, in_topic_name, custom_qos.get_rmw_qos_profile());
+    tf2_filter_ = new tf2_ros::MessageFilter<T>(scan_sub_, *tf2_buffer_, fixed_frame_, 10, n_);
+    tf2_filter_->registerCallback( std::bind(&BaseAssembler<T>::msgCallback, this, std::placeholders::_1) );
   }
 }
 
 template <class T>
 void BaseAssembler<T>::start()
 {
-  ROS_DEBUG("Called start(). Starting tf::MessageFilter, but not initializing Subscriber");
-  if (tf_filter_)
-    ROS_ERROR("assembler::start() was called twice!. This is bad, and could leak memory") ;
+  RCLCPP_DEBUG(n_->get_logger(), "Called start(). Starting tf::MessageFilter, but not initializing Subscriber");
+  if (tf2_filter_)
+    RCLCPP_ERROR(n_->get_logger(), "assembler::start() was called twice!. This is bad, and could leak memory") ;
   else
   {
-    scan_sub_.subscribe(n_, "bogus", 10);
-    tf_filter_ = new tf::MessageFilter<T>(scan_sub_, *tf_, fixed_frame_, 10);
-    tf_filter_->registerCallback( boost::bind(&BaseAssembler<T>::msgCallback, this, _1) );
+    rclcpp::QoS custom_qos(10);
+    scan_sub_.subscribe(n_, "bogus", custom_qos.get_rmw_qos_profile());
+    tf2_filter_ = new tf2_ros::MessageFilter<T>(scan_sub_, *tf2_buffer_, fixed_frame_, 10, n_);
+    tf2_filter_->registerCallback( std::bind(&BaseAssembler<T>::msgCallback, this, std::placeholders::_1) );
   }
 }
 
 template <class T>
 BaseAssembler<T>::~BaseAssembler()
 {
-  if (tf_filter_)
-    delete tf_filter_;
+  if (tf2_filter_)
+    delete tf2_filter_;
 
-  delete tf_ ;
+  delete tf2_ ;
+  delete tf2_buffer_;
 }
 
 template <class T>
-void BaseAssembler<T>::msgCallback(const boost::shared_ptr<const T>& scan_ptr)
+void BaseAssembler<T>::msgCallback(const std::shared_ptr<const T>& scan_ptr)
 {
-  ROS_DEBUG("starting msgCallback");
+  RCLCPP_DEBUG(n_->get_logger(), "starting msgCallback");
   const T scan = *scan_ptr ;
 
-  sensor_msgs::PointCloud cur_cloud ;
+  sensor_msgs::msg::PointCloud cur_cloud ;
 
   // Convert the scan data into a universally known datatype: PointCloud
   try
   {
     ConvertToCloud(fixed_frame_, scan, cur_cloud) ;              // Convert scan into a point cloud
   }
-  catch(tf::TransformException& ex)
+  catch(tf2::TransformException& ex)
   {
-    ROS_WARN("Transform Exception %s", ex.what()) ;
+    RCLCPP_WARN(n_->get_logger(), "Transform Exception %s", ex.what()) ;
     return ;
   }
 
@@ -258,19 +280,21 @@ void BaseAssembler<T>::msgCallback(const boost::shared_ptr<const T>& scan_ptr)
   //printf("Scans: %4u  Points: %10u\n", scan_hist_.size(), total_pts_) ;
 
   scan_hist_mutex_.unlock() ;
-  ROS_DEBUG("done with msgCallback");
+  RCLCPP_DEBUG(n_->get_logger(), "done with msgCallback");
 }
 
 template <class T>
-bool BaseAssembler<T>::buildCloud(AssembleScans::Request& req, AssembleScans::Response& resp)
+bool BaseAssembler<T>::buildCloud(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
+                                  const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp)
 {
-  ROS_WARN("Service 'build_cloud' is deprecated. Call 'assemble_scans' instead");
+  RCLCPP_WARN(n_->get_logger(), "Service 'build_cloud' is deprecated. Call 'assemble_scans' instead");
   return assembleScans(req, resp);
 }
 
 
 template <class T>
-bool BaseAssembler<T>::assembleScans(AssembleScans::Request& req, AssembleScans::Response& resp)
+bool BaseAssembler<T>::assembleScans(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
+                                     const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp)
 {
   //printf("Starting Service Request\n") ;
 
@@ -280,7 +304,7 @@ bool BaseAssembler<T>::assembleScans(AssembleScans::Request& req, AssembleScans:
 
   // Find the beginning of the request. Probably should be a search
   while ( i < scan_hist_.size() &&                                                    // Don't go past end of deque
-          scan_hist_[i].header.stamp < req.begin )                                    // Keep stepping until we've exceeded the start time
+          rclcpp::Time(scan_hist_[i].header.stamp) < rclcpp::Time(req->begin) )                                    // Keep stepping until we've exceeded the start time
   {
     i++ ;
   }
@@ -289,7 +313,7 @@ bool BaseAssembler<T>::assembleScans(AssembleScans::Request& req, AssembleScans:
   unsigned int req_pts = 0 ;                                                          // Keep a total of the points in the current request
   // Find the end of the request
   while ( i < scan_hist_.size() &&                                                    // Don't go past end of deque
-          scan_hist_[i].header.stamp < req.end )                                      // Don't go past the end-time of the request
+          rclcpp::Time(scan_hist_[i].header.stamp) < rclcpp::Time(req->end) )                                      // Don't go past the end-time of the request
   {
     req_pts += (scan_hist_[i].points.size ()+downsample_factor_-1)/downsample_factor_ ;
     i += downsample_factor_ ;
@@ -298,25 +322,25 @@ bool BaseAssembler<T>::assembleScans(AssembleScans::Request& req, AssembleScans:
 
   if (start_index == past_end_index)
   {
-    resp.cloud.header.frame_id = fixed_frame_ ;
-    resp.cloud.header.stamp = req.end ;
-    resp.cloud.points.resize (0) ;
-    resp.cloud.channels.resize (0) ;
+    resp->cloud.header.frame_id = fixed_frame_ ;
+    resp->cloud.header.stamp = req->end ;
+    resp->cloud.points.resize (0) ;
+    resp->cloud.channels.resize (0) ;
   }
   else
   {
     // Note: We are assuming that channel information is consistent across multiple scans. If not, then bad things (segfaulting) will happen
     // Allocate space for the cloud
-    resp.cloud.points.resize (req_pts);
+    resp->cloud.points.resize (req_pts);
     const unsigned int num_channels = scan_hist_[start_index].channels.size ();
-    resp.cloud.channels.resize (num_channels) ;
+    resp->cloud.channels.resize (num_channels) ;
     for (i = 0; i<num_channels; i++)
     {
-      resp.cloud.channels[i].name = scan_hist_[start_index].channels[i].name ;
-      resp.cloud.channels[i].values.resize (req_pts) ;
+      resp->cloud.channels[i].name = scan_hist_[start_index].channels[i].name ;
+      resp->cloud.channels[i].values.resize (req_pts) ;
     }
-    //resp.cloud.header.stamp = req.end ;
-    resp.cloud.header.frame_id = fixed_frame_ ;
+    //resp->cloud.header.stamp = req->end ;
+    resp->cloud.header.frame_id = fixed_frame_ ;
     unsigned int cloud_count = 0 ;
     for (i=start_index; i<past_end_index; i+=downsample_factor_)
     {
@@ -325,48 +349,50 @@ bool BaseAssembler<T>::assembleScans(AssembleScans::Request& req, AssembleScans:
       for (unsigned int chan_ind = 0; chan_ind < scan_hist_[i].channels.size(); chan_ind++)
       {
         if (scan_hist_[i].points.size () != scan_hist_[i].channels[chan_ind].values.size())
-          ROS_FATAL("Trying to add a malformed point cloud. Cloud has %u points, but channel %u has %u elems", (int)scan_hist_[i].points.size (), chan_ind, (int)scan_hist_[i].channels[chan_ind].values.size ());
+          RCLCPP_FATAL(n_->get_logger(), "Trying to add a malformed point cloud. Cloud has %u points, but channel %u has %u elems", (int)scan_hist_[i].points.size (), chan_ind, (int)scan_hist_[i].channels[chan_ind].values.size ());
       }
 
       for(unsigned int j=0; j<scan_hist_[i].points.size (); j+=downsample_factor_)
       {
-        resp.cloud.points[cloud_count].x = scan_hist_[i].points[j].x ;
-        resp.cloud.points[cloud_count].y = scan_hist_[i].points[j].y ;
-        resp.cloud.points[cloud_count].z = scan_hist_[i].points[j].z ;
+        resp->cloud.points[cloud_count].x = scan_hist_[i].points[j].x ;
+        resp->cloud.points[cloud_count].y = scan_hist_[i].points[j].y ;
+        resp->cloud.points[cloud_count].z = scan_hist_[i].points[j].z ;
 
         for (unsigned int k=0; k<num_channels; k++)
-          resp.cloud.channels[k].values[cloud_count] = scan_hist_[i].channels[k].values[j] ;
+          resp->cloud.channels[k].values[cloud_count] = scan_hist_[i].channels[k].values[j] ;
 
         cloud_count++ ;
       }
-      resp.cloud.header.stamp = scan_hist_[i].header.stamp;
+      resp->cloud.header.stamp = scan_hist_[i].header.stamp;
     }
   }
   scan_hist_mutex_.unlock() ;
 
-  ROS_DEBUG("Point Cloud Results: Aggregated from index %u->%u. BufferSize: %lu. Points in cloud: %u", start_index, past_end_index, scan_hist_.size(), (int)resp.cloud.points.size ()) ;
+  RCLCPP_DEBUG(n_->get_logger(), "Point Cloud Results: Aggregated from index %u->%u. BufferSize: %lu. Points in cloud: %u", start_index, past_end_index, scan_hist_.size(), (int)resp->cloud.points.size ()) ;
   return true ;
 }
 
 template <class T>
-bool BaseAssembler<T>::buildCloud2(AssembleScans2::Request& req, AssembleScans2::Response& resp)
+bool BaseAssembler<T>::buildCloud2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
+                                   const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp)
 {
-  ROS_WARN("Service 'build_cloud' is deprecated. Call 'assemble_scans' instead");
+  RCLCPP_WARN(n_->get_logger(), "Service 'build_cloud' is deprecated. Call 'assemble_scans' instead");
   return assembleScans2(req, resp);
 }
 
 template <class T>
-bool BaseAssembler<T>::assembleScans2(AssembleScans2::Request& req, AssembleScans2::Response& resp)
+bool BaseAssembler<T>::assembleScans2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
+                                      const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp)
 {
-  AssembleScans::Request tmp_req;
-  AssembleScans::Response tmp_res;
-  tmp_req.begin = req.begin;
-  tmp_req.end = req.end;
+  laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr tmp_req;
+  laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr tmp_res;
+  tmp_req->begin = req->begin;
+  tmp_req->end = req->end;
   bool ret = assembleScans(tmp_req, tmp_res);
 
   if ( ret )
   {
-    sensor_msgs::convertPointCloudToPointCloud2(tmp_res.cloud, resp.cloud);
+    sensor_msgs::convertPointCloudToPointCloud2(tmp_res->cloud, resp->cloud);
   }
   return ret;
 }

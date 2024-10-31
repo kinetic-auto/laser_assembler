@@ -1,102 +1,115 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.14.4)
 project(laser_assembler)
 
-##############################################################################
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
 # Find dependencies
-##############################################################################
+find_package(ament_cmake_ros REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_sensor_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(laser_geometry REQUIRED)
+find_package(laser_assembler_interfaces REQUIRED)
+find_package(filters CONFIG REQUIRED)
+find_package(pluginlib REQUIRED)
 
-set(THIS_PACKAGE_ROS_DEPS
-tf sensor_msgs message_filters roscpp laser_geometry filters)
+# add_executable(laser_scan_assembler_srv src/laser_scan_assembler_srv.cpp)
+# ament_target_dependencies(laser_scan_assembler_srv 
+#                           rclcpp 
+#                           tf2 
+#                           tf2_ros 
+#                           sensor_msgs 
+#                           laser_geometry 
+#                           laser_assembler_interfaces 
+#                           filters
+#                           pluginlib)
+# target_include_directories(laser_scan_assembler_srv PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# target_link_libraries(laser_scan_assembler_srv PUBLIC rclcpp::rclcpp)
 
-find_package(catkin REQUIRED COMPONENTS
-  ${THIS_PACKAGE_ROS_DEPS}
-  message_generation)
-find_package(Boost REQUIRED COMPONENTS system)
-include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
+# add_executable(laser_scan_assembler src/laser_scan_assembler.cpp)
+# target_include_directories(laser_scan_assembler PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# target_link_libraries(laser_scan_assembler PUBLIC rclcpp::rclcpp)
 
-##############################################################################
-# Build service definitions
-##############################################################################
-add_service_files(FILES
-AssembleScans.srv
-AssembleScans2.srv)
+# add_executable(merge_clouds src/merge_clouds.cpp)
+# target_include_directories(merge_clouds PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# target_link_libraries(merge_clouds PUBLIC rclcpp::rclcpp)
 
-generate_messages(DEPENDENCIES sensor_msgs std_msgs)
+# add_executable(point_cloud_assembler_srv src/point_cloud_assembler_srv.cpp)
+# target_include_directories(point_cloud_assembler_srv PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# target_link_libraries(point_cloud_assembler_srv PUBLIC rclcpp::rclcpp)
 
-##############################################################################
-# Define package
-##############################################################################
-
-catkin_package(
-  INCLUDE_DIRS include
-  CATKIN_DEPENDS ${THIS_PACKAGE_ROS_DEPS} message_runtime
-  DEPENDS
-  )
-
-##############################################################################
-# Build
-##############################################################################
-
-add_executable(laser_scan_assembler_srv src/laser_scan_assembler_srv.cpp)
-target_link_libraries(laser_scan_assembler_srv ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-add_dependencies(laser_scan_assembler_srv ${PROJECT_NAME}_gencpp)
-
-add_executable(laser_scan_assembler src/laser_scan_assembler.cpp)
-target_link_libraries(laser_scan_assembler ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-add_dependencies(laser_scan_assembler ${PROJECT_NAME}_gencpp)
-
-add_executable(merge_clouds src/merge_clouds.cpp)
-target_link_libraries(merge_clouds ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-add_dependencies(merge_clouds ${PROJECT_NAME}_gencpp)
-
-add_executable(point_cloud_assembler_srv src/point_cloud_assembler_srv.cpp)
-target_link_libraries(point_cloud_assembler_srv ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-add_dependencies(point_cloud_assembler_srv ${PROJECT_NAME}_gencpp)
-
-add_executable(point_cloud_assembler src/point_cloud_assembler.cpp)
-target_link_libraries(point_cloud_assembler ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-add_dependencies(point_cloud_assembler ${PROJECT_NAME}_gencpp)
+# add_executable(point_cloud_assembler src/point_cloud_assembler.cpp)
+# target_include_directories(point_cloud_assembler PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# target_link_libraries(point_cloud_assembler PUBLIC rclcpp::rclcpp)
 
 add_executable(point_cloud2_assembler src/point_cloud2_assembler.cpp)
-target_link_libraries(point_cloud2_assembler ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-add_dependencies(point_cloud2_assembler ${PROJECT_NAME}_gencpp)
+ament_target_dependencies(point_cloud2_assembler 
+                          rclcpp 
+                          tf2 
+                          tf2_ros
+                          tf2_sensor_msgs
+                          sensor_msgs 
+                          laser_geometry 
+                          laser_assembler_interfaces 
+                          )
+target_include_directories(point_cloud2_assembler PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+# target_link_libraries(point_cloud2_assembler PUBLIC rclcpp::rclcpp)
 
-## unit testing
+# if (BUILD_TESTING)
+#   find_package(rostest)
+#   find_package(ament_cmake_gtest REQUIRED)
 
-if(CATKIN_ENABLE_TESTING)
-  find_package(rostest)
+#   add_executable(periodic_snapshotter examples/periodic_snapshotter.cpp)
+#   target_include_directories(periodic_snapshotter PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include>)
+#   target_link_libraries(periodic_snapshotter PUBLIC rclcpp::rclcpp)
 
-  add_executable(periodic_snapshotter examples/periodic_snapshotter.cpp)
-  target_link_libraries(periodic_snapshotter ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-  add_dependencies(periodic_snapshotter ${PROJECT_NAME}_gencpp)
+#   add_executable(dummy_scan_producer test/dummy_scan_producer.cpp)
+#   target_include_directories(dummy_scan_producer PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include>)
+#   target_link_libraries(dummy_scan_producer PUBLIC rclcpp::rclcpp)
 
-  add_executable(dummy_scan_producer test/dummy_scan_producer.cpp)
-  target_link_libraries(dummy_scan_producer ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-  add_dependencies(dummy_scan_producer ${PROJECT_NAME}_gencpp)
-
-  add_executable(test_assembler test/test_assembler.cpp)
-  target_link_libraries(test_assembler ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${GTEST_LIBRARIES})
-  add_dependencies(test_assembler ${PROJECT_NAME}_gencpp)
-
-  add_rostest(test/test_laser_assembler.launch)
-endif()
+#   add_executable(test_assembler test/test_assembler.cpp)
+#   target_include_directories(test_assembler PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include>)
+#   target_link_libraries(test_assembler PUBLIC rclcpp::rclcpp)
+# endif()
 
 ##############################################################################
 # Install
 ##############################################################################
 
 install(TARGETS
-    laser_scan_assembler_srv
-    laser_scan_assembler
-    merge_clouds
-    point_cloud_assembler_srv
-    point_cloud_assembler
+    # laser_scan_assembler_srv
+    # laser_scan_assembler
+    # merge_clouds
+    # point_cloud_assembler_srv
+    # point_cloud_assembler
     point_cloud2_assembler
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # Install headers
 install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
+  DESTINATION include/${PROJECT_NAME})
+
+ament_package()
