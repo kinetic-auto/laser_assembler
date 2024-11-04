@@ -37,6 +37,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/message_filter.h"
+#include "tf2_ros/create_timer_ros.h"
 #include "tf2_sensor_msgs/tf2_sensor_msgs.h"
 #include "sensor_msgs/msg/point_cloud.hpp"
 #include "sensor_msgs/point_cloud_conversion.hpp"
@@ -152,6 +153,11 @@ BaseAssembler<T>::BaseAssembler(std::shared_ptr<rclcpp::Node> nh, const std::str
     RCLCPP_ERROR(n_->get_logger(), "Parameter tf_cache_time_secs<0 (%f)", tf_cache_time_secs) ;
 
   tf2_buffer_ = new tf2_ros::Buffer(n_->get_clock(), tf2::durationFromSec(tf_cache_time_secs));
+  auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
+    n_->get_node_base_interface(),
+    n_->get_node_timers_interface()
+    );
+  tf2_buffer_->setCreateTimerInterface(timer_interface);
   tf2_ = new tf2_ros::TransformListener(*tf2_buffer_, n_);
   RCLCPP_INFO(n_->get_logger(), "TF Cache Time: %f Seconds", tf_cache_time_secs) ;
 
@@ -296,7 +302,7 @@ template <class T>
 bool BaseAssembler<T>::assembleScans(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
                                      const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp)
 {
-  //printf("Starting Service Request\n") ;
+  RCLCPP_DEBUG(n_->get_logger(), "In assembleScans()") ;
 
   scan_hist_mutex_.lock() ;
   // Determine where in our history we actually are
@@ -384,8 +390,12 @@ template <class T>
 bool BaseAssembler<T>::assembleScans2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
                                       const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp)
 {
-  laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr tmp_req;
-  laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr tmp_res;
+  RCLCPP_DEBUG(n_->get_logger(), "In assembleScans2()");
+  auto tmp_req = std::make_shared<laser_assembler_interfaces::srv::AssembleScans::Request>();
+  auto tmp_res = std::make_shared<laser_assembler_interfaces::srv::AssembleScans::Response>();
+
+  RCLCPP_INFO(n_->get_logger(), "Request begin: %d.%09d", req->begin.sec, req->begin.nanosec);
+  RCLCPP_INFO(n_->get_logger(), "Request end: %d.%09d", req->end.sec, req->end.nanosec);
   tmp_req->begin = req->begin;
   tmp_req->end = req->end;
   bool ret = assembleScans(tmp_req, tmp_res);
@@ -396,4 +406,5 @@ bool BaseAssembler<T>::assembleScans2(const laser_assembler_interfaces::srv::Ass
   }
   return ret;
 }
-}
+
+} // namespace laser_assembler
