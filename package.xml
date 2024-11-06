@@ -24,6 +24,7 @@
   <depend>message_filters</depend>
   <depend>rostest</depend>
   <depend>pluginlib</depend>
+  <depend>laser_assembler_interfaces</depend>
   
   <test_depend>amend_cmake_gtest</test_depend>test_depend>
 
