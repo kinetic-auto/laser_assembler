@@ -36,7 +36,9 @@ class LaserAssemblerClient(Node):
 def write_pointcloud2_to_xyz(cloud, filename):
 	points = point_cloud2.read_points(cloud)
 	validPoints = points[np.isfinite(points['x'])]
-	np.savetxt(filename, validPoints, delimiter=',', fmt=['%.6f', '%.6f', '%.6f', '%d'])
+	if len(validPoints):
+		np.savetxt(filename, validPoints, delimiter=',', fmt=['%.6f', '%.6f', '%.6f', '%d'])
+	return len(validPoints)
 
 
 def main(args=None):
