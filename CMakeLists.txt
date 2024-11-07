@@ -17,6 +17,10 @@ find_package(laser_assembler_interfaces REQUIRED)
 find_package(filters CONFIG REQUIRED)
 find_package(pluginlib REQUIRED)
 
+# Dependencies for python components
+find_package(rclpy REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+
 # add_executable(laser_scan_assembler_srv src/laser_scan_assembler_srv.cpp)
 # ament_target_dependencies(laser_scan_assembler_srv 
 #                           rclcpp 
@@ -105,6 +109,12 @@ install(TARGETS
     # point_cloud_assembler_srv
     # point_cloud_assembler
     point_cloud2_assembler
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+ament_python_install_package(${PROJECT_NAME})
+install(PROGRAMS
+  scripts/client.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
