@@ -13,13 +13,21 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(laser_geometry REQUIRED)
-find_package(laser_assembler_interfaces REQUIRED)
 find_package(filters CONFIG REQUIRED)
 find_package(pluginlib REQUIRED)
+
+# For building service messages
+find_package(rosidl_default_generators REQUIRED)
 
 # Dependencies for python components
 find_package(rclpy REQUIRED)
 find_package(ament_cmake_python REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/AssembleScans.srv"
+  "srv/AssembleScans2.srv"
+  DEPENDENCIES sensor_msgs
+)
 
 # add_executable(laser_scan_assembler_srv src/laser_scan_assembler_srv.cpp)
 # ament_target_dependencies(laser_scan_assembler_srv 
@@ -68,12 +76,12 @@ ament_target_dependencies(point_cloud2_assembler
                           tf2_sensor_msgs
                           sensor_msgs 
                           laser_geometry 
-                          laser_assembler_interfaces 
                           )
 target_include_directories(point_cloud2_assembler PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-# target_link_libraries(point_cloud2_assembler PUBLIC rclcpp::rclcpp)
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(point_cloud2_assembler "${cpp_typesupport_target}")
 
 # if (BUILD_TESTING)
 #   find_package(rostest)
@@ -112,7 +120,7 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-ament_python_install_package(${PROJECT_NAME})
+ament_python_install_package(${PROJECT_NAME}_py)
 install(PROGRAMS
   scripts/client.py
   DESTINATION lib/${PROJECT_NAME}

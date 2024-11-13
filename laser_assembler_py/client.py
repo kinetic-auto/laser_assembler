@@ -3,7 +3,7 @@ import time
 import numpy as np
 
 import rclpy
-from laser_assembler_interfaces.srv import AssembleScans2
+from laser_assembler.srv import AssembleScans2
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from rclpy.node import Node

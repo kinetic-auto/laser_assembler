@@ -46,8 +46,8 @@
 #include <deque>
 
 // Service
-#include "laser_assembler_interfaces/srv/assemble_scans.hpp"
-#include "laser_assembler_interfaces/srv/assemble_scans2.hpp"
+#include "laser_assembler/srv/assemble_scans.hpp"
+#include "laser_assembler/srv/assemble_scans2.hpp"
 
 #include "math.h"
 
@@ -101,10 +101,10 @@ protected:
 
 private:
   // ROS Input/Ouptut Handling
-  rclcpp::Service<laser_assembler_interfaces::srv::AssembleScans>::SharedPtr build_cloud_server_;
-  rclcpp::Service<laser_assembler_interfaces::srv::AssembleScans>::SharedPtr assemble_scans_server_;
-  rclcpp::Service<laser_assembler_interfaces::srv::AssembleScans2>::SharedPtr build_cloud_server2_;
-  rclcpp::Service<laser_assembler_interfaces::srv::AssembleScans2>::SharedPtr assemble_scans_server2_;
+  rclcpp::Service<laser_assembler::srv::AssembleScans>::SharedPtr build_cloud_server_;
+  rclcpp::Service<laser_assembler::srv::AssembleScans>::SharedPtr assemble_scans_server_;
+  rclcpp::Service<laser_assembler::srv::AssembleScans2>::SharedPtr build_cloud_server2_;
+  rclcpp::Service<laser_assembler::srv::AssembleScans2>::SharedPtr assemble_scans_server2_;
 
   message_filters::Subscriber<T> scan_sub_;
   message_filters::Connection tf2_filter_connection_;
@@ -114,14 +114,14 @@ private:
   virtual void msgCallback(const std::shared_ptr<const T>& scan_ptr) ;
 
   //! \brief Service Callback function called whenever we need to build a cloud
-  bool buildCloud(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
-                  const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp) ;
-  bool assembleScans(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
-                     const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp) ;
-  bool buildCloud2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
-                   const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp) ;
-  bool assembleScans2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
-                      const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp) ;
+  bool buildCloud(const laser_assembler::srv::AssembleScans::Request::SharedPtr req, 
+                  const laser_assembler::srv::AssembleScans::Response::SharedPtr resp) ;
+  bool assembleScans(const laser_assembler::srv::AssembleScans::Request::SharedPtr req, 
+                     const laser_assembler::srv::AssembleScans::Response::SharedPtr resp) ;
+  bool buildCloud2(const laser_assembler::srv::AssembleScans2::Request::SharedPtr req, 
+                   const laser_assembler::srv::AssembleScans2::Response::SharedPtr resp) ;
+  bool assembleScans2(const laser_assembler::srv::AssembleScans2::Request::SharedPtr req, 
+                      const laser_assembler::srv::AssembleScans2::Response::SharedPtr resp) ;
 
   //! \brief Stores history of scans
   std::deque<sensor_msgs::msg::PointCloud> scan_hist_ ;
@@ -199,13 +199,13 @@ BaseAssembler<T>::BaseAssembler(std::shared_ptr<rclcpp::Node> nh, const std::str
     RCLCPP_WARN(n_->get_logger(), "Downsample set to [%u]. Note that this is an unreleased/unstable feature", downsample_factor_);
 
   // ***** Start Services *****
-  build_cloud_server_ = n_->create_service<laser_assembler_interfaces::srv::AssembleScans>("~/build_cloud", 
+  build_cloud_server_ = n_->create_service<laser_assembler::srv::AssembleScans>("~/build_cloud", 
         std::bind(&BaseAssembler<T>::buildCloud, this, std::placeholders::_1, std::placeholders::_2));
-  assemble_scans_server_ = n_->create_service<laser_assembler_interfaces::srv::AssembleScans>("~/assemble_scans", 
+  assemble_scans_server_ = n_->create_service<laser_assembler::srv::AssembleScans>("~/assemble_scans", 
         std::bind(&BaseAssembler<T>::assembleScans, this, std::placeholders::_1, std::placeholders::_2));
-  build_cloud_server2_ = n_->create_service<laser_assembler_interfaces::srv::AssembleScans2>("~/build_cloud2", 
+  build_cloud_server2_ = n_->create_service<laser_assembler::srv::AssembleScans2>("~/build_cloud2", 
         std::bind(&BaseAssembler<T>::buildCloud2, this, std::placeholders::_1, std::placeholders::_2));
-  assemble_scans_server2_ = n_->create_service<laser_assembler_interfaces::srv::AssembleScans2>("~/assemble_scans2", 
+  assemble_scans_server2_ = n_->create_service<laser_assembler::srv::AssembleScans2>("~/assemble_scans2", 
         std::bind(&BaseAssembler<T>::assembleScans2, this, std::placeholders::_1, std::placeholders::_2));
 
   // ***** Start Listening to Data *****
@@ -290,8 +290,8 @@ void BaseAssembler<T>::msgCallback(const std::shared_ptr<const T>& scan_ptr)
 }
 
 template <class T>
-bool BaseAssembler<T>::buildCloud(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
-                                  const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp)
+bool BaseAssembler<T>::buildCloud(const laser_assembler::srv::AssembleScans::Request::SharedPtr req, 
+                                  const laser_assembler::srv::AssembleScans::Response::SharedPtr resp)
 {
   RCLCPP_WARN(n_->get_logger(), "Service 'build_cloud' is deprecated. Call 'assemble_scans' instead");
   return assembleScans(req, resp);
@@ -299,8 +299,8 @@ bool BaseAssembler<T>::buildCloud(const laser_assembler_interfaces::srv::Assembl
 
 
 template <class T>
-bool BaseAssembler<T>::assembleScans(const laser_assembler_interfaces::srv::AssembleScans::Request::SharedPtr req, 
-                                     const laser_assembler_interfaces::srv::AssembleScans::Response::SharedPtr resp)
+bool BaseAssembler<T>::assembleScans(const laser_assembler::srv::AssembleScans::Request::SharedPtr req, 
+                                     const laser_assembler::srv::AssembleScans::Response::SharedPtr resp)
 {
   RCLCPP_DEBUG(n_->get_logger(), "In assembleScans()") ;
 
@@ -379,20 +379,20 @@ bool BaseAssembler<T>::assembleScans(const laser_assembler_interfaces::srv::Asse
 }
 
 template <class T>
-bool BaseAssembler<T>::buildCloud2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
-                                   const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp)
+bool BaseAssembler<T>::buildCloud2(const laser_assembler::srv::AssembleScans2::Request::SharedPtr req, 
+                                   const laser_assembler::srv::AssembleScans2::Response::SharedPtr resp)
 {
   RCLCPP_WARN(n_->get_logger(), "Service 'build_cloud' is deprecated. Call 'assemble_scans' instead");
   return assembleScans2(req, resp);
 }
 
 template <class T>
-bool BaseAssembler<T>::assembleScans2(const laser_assembler_interfaces::srv::AssembleScans2::Request::SharedPtr req, 
-                                      const laser_assembler_interfaces::srv::AssembleScans2::Response::SharedPtr resp)
+bool BaseAssembler<T>::assembleScans2(const laser_assembler::srv::AssembleScans2::Request::SharedPtr req, 
+                                      const laser_assembler::srv::AssembleScans2::Response::SharedPtr resp)
 {
   RCLCPP_DEBUG(n_->get_logger(), "In assembleScans2()");
-  auto tmp_req = std::make_shared<laser_assembler_interfaces::srv::AssembleScans::Request>();
-  auto tmp_res = std::make_shared<laser_assembler_interfaces::srv::AssembleScans::Response>();
+  auto tmp_req = std::make_shared<laser_assembler::srv::AssembleScans::Request>();
+  auto tmp_res = std::make_shared<laser_assembler::srv::AssembleScans::Response>();
 
   RCLCPP_INFO(n_->get_logger(), "Request begin: %d.%09d", req->begin.sec, req->begin.nanosec);
   RCLCPP_INFO(n_->get_logger(), "Request end: %d.%09d", req->end.sec, req->end.nanosec);
