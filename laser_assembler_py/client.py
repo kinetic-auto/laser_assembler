@@ -33,12 +33,16 @@ class LaserAssemblerClient(Node):
 		rclpy.spin_until_future_complete(self, future)
 		return future.result()
 
-def write_pointcloud2_to_xyz(cloud, filename):
+def write_pointcloud2_to_xyz(cloud, filename, valid_only=False):
 	points = point_cloud2.read_points(cloud)
-	validPoints = points[np.isfinite(points['x'])]
-	if len(validPoints):
-		np.savetxt(filename, validPoints, delimiter=',', fmt=['%.6f', '%.6f', '%.6f', '%d'])
-	return len(validPoints)
+	if valid_only:
+		output_points = points[np.isfinite(points['x'])]
+	else:
+		output_points = points
+
+	np.savetxt(filename, output_points, delimiter=',', fmt=['%.6f', '%.6f', '%.6f', '%d'])
+
+	return len(output_points)
 
 
 def main(args=None):
@@ -56,6 +60,7 @@ def main(args=None):
 	parser.add_argument('--abs_time', '-a', action='store_true',
 		                help='Specifies that the start/end_time parameters are POSIX timestamps')
 	parser.add_argument('--publish_result', '-p', action='store_true', help='Publish the resulting point cloud on /scan')
+	parser.add_argument('--valid_points_only', '-v', action='store_true', help='Do not write invalid/NaN points to file')
 	args = parser.parse_args()
 
 	client = LaserAssemblerClient(server_node_name=args.server_node_name)
@@ -82,7 +87,7 @@ def main(args=None):
 
 	outputFilename = f'{args.server_node_name}_{start_time:.6f}_{end_time:.6f}.xyz'
 	print(f'Writing point cloud to {outputFilename}')
-	write_pointcloud2_to_xyz(result.cloud, outputFilename)
+	write_pointcloud2_to_xyz(result.cloud, outputFilename, args.valid_points_only)
 
 	client.destroy_node()
 	rclpy.shutdown()

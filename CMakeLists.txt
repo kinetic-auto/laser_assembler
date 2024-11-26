@@ -122,7 +122,7 @@ install(TARGETS
 
 ament_python_install_package(${PROJECT_NAME}_py)
 install(PROGRAMS
-  scripts/client.py
+  scripts/client
   DESTINATION lib/${PROJECT_NAME}
 )
 
