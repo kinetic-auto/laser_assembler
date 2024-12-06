@@ -85,7 +85,7 @@ def main(args=None):
 		client.scan_publisher.publish(result.cloud)
 		rclpy.spin(client)
 
-	outputFilename = f'{args.server_node_name}_{start_time:.6f}_{end_time:.6f}.xyz'
+	outputFilename = f"{args.server_node_name.strip('/')}_{start_time:.6f}_{end_time:.6f}.xyz"
 	print(f'Writing point cloud to {outputFilename}')
 	write_pointcloud2_to_xyz(result.cloud, outputFilename, args.valid_points_only)
 

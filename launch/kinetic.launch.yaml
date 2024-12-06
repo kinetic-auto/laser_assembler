@@ -1,0 +1,18 @@
+launch:
+
+- node:
+    pkg: "laser_assembler"
+    exec: "point_cloud2_assembler"
+    remap:
+      - from: "cloud"
+        to: "striper/points"
+    param:
+      - name: "tf_cache_time_secs"
+        type: float
+        value: 360.0
+      - name: "max_clouds"
+        type: int
+        value: 11000
+      - name: "fixed_frame"
+        type: str
+        value: "tt_0" 
